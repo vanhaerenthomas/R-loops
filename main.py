@@ -37,7 +37,7 @@ dfs = {}
 for t in types:
     for polarity in ['neg', 'pos']:
         file_path = os.path.join(matrices_path, f"DRIP_{t}_{polarity}.csv")
-        df = pd.read_csv(file_path, sep='\t').head(10)
+        df = pd.read_csv(file_path, sep='\t')
         df["CLASS"] = 0 if polarity == 'neg' else 1
         dfs[f"{t}_{polarity}"] = df
 
