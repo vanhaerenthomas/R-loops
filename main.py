@@ -27,7 +27,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-base_location = "E:\\Work\\UPO Sevilla\\Doctorate_3_DROP_3T3_E14"
+# Set the base location to the directory where the script is located
+base_location = os.path.dirname(os.path.abspath(__file__))
 matrices_path = os.path.join(base_location, "matrices")
 
 types = ['3T3', 'E14']
