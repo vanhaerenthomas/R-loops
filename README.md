@@ -30,6 +30,7 @@ To run this code, you'll need Python and several libraries. You can install the 
 
 ```bash
 pip install pandas seaborn xgboost scikit-learn matplotlib keras pyreadr joblib
+```
 
 Make sure you have the necessary datasets in the specified directories as mentioned in the code.
 
