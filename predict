@@ -1,0 +1,90 @@
+#!/usr/bin/env Rscript
+suppressMessages(library(optparse));
+
+option_list <- list(
+	make_option(c("-n", "--name"), type="character", default="predictions",
+		help="Execution name (predictions will be reported in a file with this name)", metavar="character"),
+	make_option(c("-d", "--datasets"), type="character", default=NULL,
+		help="Tabulated file (with no header line) containing paths of sequencing datasets (RPM normalized and 4-columns bedgraph format).\n\t\tNote that model features should be provided and others will be ignored.\n\t\tPossible feature names are: H3K9ac,H3K9me3,H3K27me3,H3K4me3,H3K36me3,H3K27ac,H3K4me1,RNA_seq,DNase,GRO_seq", metavar="character"),
+	make_option(c("-t", "--target"), type="character", default="mm9",
+		help="Genome assembly name or input bed file with no header. If bed file is supplied, R-loop model will be applied to its corresponding loci.\n\t\tOtherwise, genome wide predictions will be generated (only 'mm9' and 'hg38' are supported)", metavar="character"),
+	make_option(c("-m", "--model"), type="character", default=NULL,
+		help="R-loop model file in RData format (check 'models' directory)", metavar="character")
+);
+
+opt_parser <- OptionParser(option_list=option_list);
+opt <- parse_args(opt_parser);
+
+if (is.null(opt$datasets)){
+	print_help(opt_parser);
+	stop("feature dataset paths must be supplied", call.=FALSE);
+}
+if (is.null(opt$model)){
+	print_help(opt_parser);
+	stop("model file must be supplied", call.=FALSE);
+}
+
+if(!opt$target %in% c("hg38","mm9")) targetBed <- opt$target;
+if(opt$target == "hg38") targetBed <- "genomes/hg38_1_to_22_XYM_sliding_500bp_MAPPABLE.bed";
+if(opt$target == "mm9") targetBed <- "genomes/mm9_20_longest_sliding_500bp_MAPPABLE.bed";
+infiles <- c(opt$model,opt$datasets,targetBed);
+message("\n[virtuRloops] Checking input paths");
+if(!all(file.exists(infiles))) stop("[virtuRloops] Check input file paths (some don't exist)");
+message("[virtuRloops] Checking target bed file");
+Ncols <- as.integer(system(paste("awk -F'\t' '{print NF; exit}'", targetBed),intern=T));
+if(Ncols!=3) stop("[virtuRloops] Target bed file should have 3 columns (chr-start-end) and no header!");
+width <- unique(as.integer(system(paste("awk '{ $4 = $3 - $2 } 1'", targetBed, "| awk '{ print $4 }'"),intern=T)));
+toResize <- F;
+if(length(width)!=1){message("[virtuRloops] Target bed file bins have different sizes. Note that they will be resized to 500 bp");toResize <- T
+} else if(width < 499 | width > 501){message("[virtuRloops] Bins in target bed file don't have 500 bp length so they will be resized");toResize <- T}
+if(toResize){
+	message("[virtuRloops] Resizing...");
+	st <- as.integer(system(paste("awk '{print $2}'", targetBed),intern=T));end <- as.integer(system(paste("awk '{print $3}'", targetBed),intern=T));
+	mid <- ceiling(unlist(lapply(1:length(st),function(i){mean(c(st[i],end[i]))})));
+	suppressMessages(library(stringi));
+	chrTMPfile <- paste("tmp_", opt$name, "_CHR_", stri_rand_strings(1, 10), ".txt", sep="");coordTMPfile <- paste("tmp_", opt$name, "_COORD_", stri_rand_strings(1, 10), ".txt", sep="");
+	resizedBedfile <- paste(opt$name, "_", stri_rand_strings(1, 10), "_resized500bp.bed", sep="");
+	system(paste("awk '{print $1}'", targetBed, ">", chrTMPfile));
+	write.table(data.frame(mid-250,mid+249), file=coordTMPfile, quote=F, sep="\t", row.names=F, col.names=F);
+	system(paste("paste -d '\t'", chrTMPfile, coordTMPfile, ">", resizedBedfile));system(paste("rm", chrTMPfile, coordTMPfile));
+	targetBed <- resizedBedfile;
+}
+message("[virtuRloops] Loading R-loop model");
+suppressMessages(library(randomForest));
+model <- get(load(opt$model));
+message("[virtuRloops] Loading datasets table");
+datasets <- read.csv(file=opt$datasets, sep="\t", h=T);
+message("[virtuRloops] Checking bedgraph feature files");
+bgFiles <- as.character(datasets[,2]);names(bgFiles) <- as.character(datasets[,1]);
+if(!all(file.exists(bgFiles))) stop("[virtuRloops] Check feature bedgraph file paths (some don't exist)");
+Ncols <- unlist(lapply(bgFiles,function(x){as.integer(system(paste("awk -F'\t' '{print NF; exit}'", x),intern=T))}));
+if(any(Ncols!=4)) stop("[virtuRloops] Feature bedgraph files should have 4 columns (chr-start-end-RPM) and no header!");
+if(!all(rownames(model$importance) %in% names(bgFiles))) stop("[virtuRloops] There are model features that were not found within datasets table");
+if(!"stringi" %in% (.packages())) suppressMessages(library(stringi));
+tmpBg <- unlist(lapply(names(bgFiles),function(signal){paste("tmp_", signal, "_", stri_rand_strings(1, 10), ".txt", sep="")}));names(tmpBg) <- names(bgFiles);
+for(signal in names(bgFiles)){
+	message("[virtuRloops] Counting signal: ", signal);
+	system(paste("bedtools map -a ", targetBed, " -b ", bgFiles[signal], " -c 4 -o mean > ", tmpBg[signal], sep=""));
+	system(paste("sed -i $'s/\\t\\./\\t0/g'", tmpBg));
+}
+message("[virtuRloops] Creating feature matrix");
+counts <- lapply(tmpBg,function(x){signif(as.numeric(system(paste("cat", x, "| awk '{print $4}'"),intern=T)),3)});names(counts) <- names(tmpBg);
+rm <- file.remove(tmpBg);
+mat <- matrix(unlist(counts),ncol=length(counts),nrow=length(counts[[1]]));colnames(mat) <- names(counts);naCount <- length(mat[is.na(mat)]);
+if(naCount > 0){
+	mat[is.na(mat)] <- 0;
+	message("[virtuRloops] Warning: ", naCount, " elements of the feature matrix (", paste(round((naCount/length(mat))*100,2), "%", sep = ""), ") were NA values and converted to 0");
+}
+message("[virtuRloops] Applying model to feature matrix");
+probs <- as.data.frame(predict(model, mat, type="prob"))[,"Peak"];
+message("[virtuRloops] Writing probabilities");
+outFile <- paste(opt$name, "_probs.txt", sep="");write.table(probs, file=outFile, col.names=F, row.names=F);
+message("[virtuRloops] Writing target bed file with probabilities");
+nBed <- system(paste("cat", targetBed, "| wc -l"), intern=TRUE);
+if(nBed!=length(probs)) stop("[virtuRloops] Target bed file has different length than predicted probabilities");
+outBedFile <- paste(opt$name, ".bg", sep="");system(paste("paste", targetBed, outFile, ">", outBedFile));
+if(toResize){
+	system(paste("rm", resizedBedfile));
+	message("[virtuRloops] Note that out bed file coordinates have been resized to 500 bp!");
+}
+message("[virtuRloops] Done!\n");
