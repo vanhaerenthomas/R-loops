@@ -15,7 +15,7 @@ This is the README file for the training (Python) part of the project "virtuRloo
 
 ## Project Description
 
-The goal of this part of the project is to train R-loop sites from two mouse cell lines, 3T3 and E14. The code provided here performs the following tasks:
+The goal of this part of the project is to train feature matrices corresponding to R-loop sites from two mouse cell lines (NIH3T3 and E14). The code provided here performs the following tasks:
 
 - Data loading and preprocessing.
 - Feature selection and combination.
