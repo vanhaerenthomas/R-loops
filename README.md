@@ -1,7 +1,7 @@
 
 ## Introduction
 
-R-loops are three-stranded nucleic acid structures consisting of an RNA–DNA hybrid and a displaced single-stranded DNA that frequently occur during transcription from bacteria to mammals. Current methods for R-loop site prediction are based on DNA sequence, which precludes detection across cell types, tissues or developmental stages. Here we provide virtuRloops, a computational tool that allows the prediction of cell type specific R-loops using genomic features. This method is described in our study entitled [*A computational framework for the genomic prediction of cell type specific R-loops*](https://www.biorxiv.org/XXX) (currently in bioRxiv). Human and mouse predictions can be downloaded and visualized in the [*following link*](http://193.147.188.155/pmargar/drip_pred/). 
+R-loops are three-stranded nucleic acid structures consisting of an RNA–DNA hybrid and a displaced single-stranded DNA that frequently occur during transcription from bacteria to mammals. Current methods for R-loop site prediction are based on DNA sequence, which precludes detection across cell types, tissues or developmental stages. Here we provide virtuRloops, a computational tool that allows the prediction of cell type specific R-loops using genomic features. Human and mouse predictions can be downloaded and visualized in the [*following link*](http://193.147.188.155/pmargar/drip_pred/). 
 
 ## Usage
 
