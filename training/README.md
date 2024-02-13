@@ -1,6 +1,6 @@
 # virtuRloops Training (Python)
 
-This is the README file for the training (Python) part of the project "virtuRloops". This project involves the analysis of biological data using various machine learning models and tools. The code provided here performs data preprocessing, model training, and evaluation for different feature combinations and model types. It also generates visualizations such as ROC curves, PR curves, histograms, and confusion matrices.
+This is the README file for the training (Python) part of the project "virtuRloops". This project involves the analysis of R-loop mapping data and other high-throughput sequencing features using various machine learning models and tools. The code provided here performs data preprocessing, model training, and evaluation for different feature combinations and model types. It also generates visualizations such as ROC curves, PR curves, histograms, and confusion matrices.
 
 ## Table of Contents
 
@@ -15,7 +15,7 @@ This is the README file for the training (Python) part of the project "virtuRloo
 
 ## Project Description
 
-The goal of this part of the project is to analyze biological data related to two cell types, 3T3 and E14, with both positive and negative polarities. The code provided here performs the following tasks:
+The goal of this part of the project is to train R-loop sites from two mouse cell lines, 3T3 and E14. The code provided here performs the following tasks:
 
 - Data loading and preprocessing.
 - Feature selection and combination.
