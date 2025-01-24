@@ -15,7 +15,7 @@ This is the README file for the training (Python) part of the project "virtuRloo
 
 ## Project Description
 
-The goal of this part of the project is to train feature matrices corresponding to R-loop sites from two mouse cell lines (NIH3T3 and E14). The code provided here performs the following tasks:
+The goal of this part of the project is to train feature matrices corresponding to R-loop sites from human cell lines (HEK293, HeLa, and K562). The notebook provided here performs the following tasks:
 
 - Data loading and preprocessing.
 - Feature selection and combination.
@@ -26,30 +26,37 @@ The goal of this part of the project is to train feature matrices corresponding 
 
 ## Installation
 
-To run this code, you'll need Python and several libraries. You can install the required libraries using pip:
+To run this notebook, you'll need Python and several libraries. You can install the required libraries using pip:
 
 ```bash
-pip install pandas seaborn xgboost scikit-learn matplotlib keras pyreadr joblib
+pip install pandas seaborn xgboost scikit-learn matplotlib keras keras-tuner pyreadr joblib
 ```
 
-Make sure you have the necessary datasets in the specified directories as mentioned in the code.
+Make sure you have the necessary datasets in the specified directories as mentioned in the notebook.
 
 ## Usage
-The code is structured as a Python script that can be run from a Jupyter Notebook or any Python IDE. To use the code, follow these steps:
+
+The code is structured as a Jupyter Notebook that can be run interactively. To use the notebook, follow these steps:
 
 1. Ensure you have installed the required libraries as mentioned in the Installation section.
-
-2. Make sure you have the required datasets in the specified directories (matrices).
-
-3. Run the script, and it will perform data preprocessing, model training, and evaluation.
-
-4. The code will generate various visualizations and save the best models and results in the output and models directories.
+2. Place the required datasets in the appropriate directories (e.g., `HEK293`, `HeLa`, `K562` subdirectories under the `matrices` directory).
+3. Open the notebook in Jupyter or any compatible environment.
+4. Execute the cells in sequence to perform data preprocessing, model training, and evaluation.
+5. The notebook will generate various visualizations and save the best models and results in the output and models directories.
 
 ## Data
-The data used in this project consists of biological data for two cell types, 3T3 and E14, with both positive and negative polarities. The data is loaded from CSV files located in the matrices directory.
+
+The data used in this project consists of biological data for three human cell lines:
+
+- **HEK293**
+- **HeLa**
+- **K562**
+
+The datasets include positive and negative polarities and are loaded from CSV files located in subdirectories under the `matrices` directory.
 
 ## Models
-The code includes the following machine learning models:
+
+The notebook includes the following machine learning models:
 
 - Random Forest
 - XGBoost
@@ -63,17 +70,20 @@ The code includes the following machine learning models:
 Each model is trained and evaluated for various hyperparameter combinations, and the best-performing model is saved.
 
 ## Results
-The code generates various result files and visualizations:
 
-- CSV files containing detailed results for each model and dataset pair in the output directory.
-- Best model files for each model and dataset pair in the models directory.
-- ROC curves and AUC-ROC plots in the output directory.
-- Precision-Recall curves and AUC-PR plots in the output directory.
-- Histograms of predicted probabilities in the output directory.
-- Confusion matrices in the output directory.
+The notebook generates various result files and visualizations:
+
+- CSV files containing detailed results for each model and dataset pair in the `output` directory.
+- Best model files for each model and dataset pair in the `models` directory.
+- ROC curves and AUC-ROC plots in the `output` directory.
+- Precision-Recall curves and AUC-PR plots in the `output` directory.
+- Histograms of predicted probabilities in the `output` directory.
+- Confusion matrices in the `output` directory.
 
 ## Contributing
+
 Contributions to this project are welcome. You can contribute by improving the code, adding new features, fixing bugs, or enhancing the documentation. Please follow the standard code of conduct and open a pull request for your contributions.
 
 ## License
+
 This project is licensed under the MIT License. See the LICENSE file for details.
