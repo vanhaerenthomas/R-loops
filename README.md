@@ -46,11 +46,11 @@ Options:
 ```
 Calling example for given peak file:
 ```
-./predict -n example1 -d features/features_adrenal_gland_chr22.csv -t peaks/peaks_example_chr22.bed -m models/Rloops_HEK293_HeLa_K562/deepRloop_GC_RLFS_DNase_RNA_K4me3_K9me3_K36_me1/model.RData
+./predict -n example1 -d features/features_adrenal_gland_chr22.csv -t peaks/peaks_example_chr22.bed -m models/deepRloop_GC_RLFS_DNase_RNA_K4me3_K9me3_K36_me1/model.RData
 ```
 Calling example for whole genome prediction (needs a user provided features table):
 ```
-./predict -n example2 -d myFeatures.csv -t hg38 -m models/Rloops_HEK293_HeLa_K562/deepRloop_GC_RLFS_DNase_RNA_K4me3_K9me3_K36_me1/model.RData
+./predict -n example2 -d myFeatures.csv -t hg38 -m models/deepRloop_GC_RLFS_DNase_RNA_K4me3_K9me3_K36_me1/model.RData
 ```
 
 ## Requirements
