@@ -1,33 +1,60 @@
 #!/usr/bin/env Rscript
 suppressMessages(library(optparse));
+suppressMessages(library(stringi));
 
 option_list <- list(
 	make_option(c("-n", "--name"), type="character", default="predictions",
 		help="Execution name (predictions will be reported in a file with this name)", metavar="character"),
 	make_option(c("-d", "--datasets"), type="character", default=NULL,
-		help="Tabulated file (with no header line) containing paths of sequencing datasets (RPM normalized and 4-columns bedgraph format).\n\t\tNote that model features should be provided and others will be ignored.\n\t\tPossible feature names are: H3K9ac,H3K9me3,H3K27me3,H3K4me3,H3K36me3,H3K27ac,H3K4me1,RNA_seq,DNase,GRO_seq", metavar="character"),
-	make_option(c("-t", "--target"), type="character", default="mm9",
-		help="Genome assembly name or input bed file with no header. If bed file is supplied, R-loop model will be applied to its corresponding loci.\n\t\tOtherwise, genome wide predictions will be generated (only 'mm9' and 'hg38' are supported)", metavar="character"),
+		help="Tabulated file (with no header line) containing paths of sequencing datasets (RPM normalized and 4-columns sorted bedgraph format).\n\t\tNote that model features should be provided and others will be ignored.\n\t\tPossible feature names are: H3K9ac,H3K9me3,H3K27me3,H3K4me3,H3K36me3,H3K27ac,H3K4me1,CTCF,RAD21,RNAseq,DNase,GROseq.\n\t\tIf assembly is different than 'mm9' or 'hg38', unstranded deepRloopPre scores should be also included both as a\n\t\tbedgraph format and also in the feature table (feature name = deepRloop) in case you want this feature to be considered.", metavar="character"),
+	make_option(c("-t", "--target"), type="character", default=NULL,
+		help="Input bed file (3-columns, sorted and with no header). R-loop model will be applied to supplied loci.\n\t\tIf no file is given, whole genome predictions will be generated", metavar="character"),
+	make_option(c("-a", "--assembly"), type="character", default="hg38",
+		help="Genome assembly. If other than 'mm9' or 'hg38', a fasta file with genome sequences should be provided", metavar="character"),
+	make_option(c("-f", "--fasta"), type="character", default=NULL,
+		help="Genome fasta file. Only required if assembly is different than 'mm9' or 'hg38'", metavar="character"),
 	make_option(c("-m", "--model"), type="character", default=NULL,
 		help="R-loop model file in RData format (check 'models' directory)", metavar="character")
 );
-
 opt_parser <- OptionParser(option_list=option_list);
 opt <- parse_args(opt_parser);
-
 if (is.null(opt$datasets)){
 	print_help(opt_parser);
-	stop("feature dataset paths must be supplied", call.=FALSE);
+	stop("[virtuRloops] Feature dataset table must be supplied", call.=FALSE);
 }
 if (is.null(opt$model)){
 	print_help(opt_parser);
-	stop("model file must be supplied", call.=FALSE);
+	stop("[virtuRloops] Model file must be supplied", call.=FALSE);
 }
+if (is.null(opt$target) & !opt$assembly %in% c("hg38","mm9") & is.null(opt$fasta)){
+	print_help(opt_parser);
+	stop("[virtuRloops] If assembly is different than 'mm9' or 'hg38', a genome fasta file must be supplied", call.=FALSE);
+}
+if (opt$assembly %in% c("hg38","mm9") & !is.null(opt$fasta)) message("\n[virtuRloops] Since assembly is 'mm9' or 'hg38', input fasta will be ignored");
 
-if(!opt$target %in% c("hg38","mm9")) targetBed <- opt$target;
-if(opt$target == "hg38") targetBed <- "genomes/hg38_1_to_22_XYM_sliding_500bp_MAPPABLE.bed";
-if(opt$target == "mm9") targetBed <- "genomes/mm9_20_longest_sliding_500bp_MAPPABLE.bed";
-infiles <- c(opt$model,opt$datasets,targetBed);
+BASEPATH <- "http://193.147.188.155/pmargar/static";
+TMP.PATH <- paste("tmp_files", stri_rand_strings(1, 10), sep="_");dir.create(TMP.PATH);
+wholeGenome <- is.null(opt$target);
+if(wholeGenome){
+	targetBed <- paste(TMP.PATH, "/", opt$name, "_", stri_rand_strings(1, 10), "_sliding.bed", sep="");
+	if (opt$assembly %in% c("hg38","mm9")){
+		message("\n[virtuRloops] Downloading genomic sliding windows");
+		if(opt$assembly == "hg38") targetBed.server <- paste(BASEPATH, "genomes/homo_sapiens/hg38/hg38_1_to_22_XYM_sliding_500bp_MAPPABLE.bed", sep="/");
+		if(opt$assembly == "mm9") targetBed.server <- paste(BASEPATH, "genomes/mus_musculus/mm9/mm9_20_longest_sliding_500bp_MAPPABLE.bed", sep="/");
+		system(paste("wget", targetBed.server, "-O", targetBed));
+	}
+	if(!opt$assembly %in% c("hg38","mm9")){
+		message("\n[virtuRloops] Creating genomic sliding windows");
+		if(!file.exists(opt$fasta, "fasta file")) stop("[virtuRloops] Input fasta file does not exist!");
+		system(paste("samtools faidx", opt$fasta));
+		tmpSlid.mv <- paste(TMP.PATH, "/tmp_slidingMv_", stri_rand_strings(1, 10), ".txt", sep="");
+		system(paste("bedtools makewindows -w 500 -g ", opt$fasta, ".fai > ", targetBed, sep=""));
+		system(paste("awk '{$2=$2+1; print $1\"\t\"$2\"\t\"$3 }'", targetBed, ">", tmpSlid.mv, "&& mv", tmpSlid.mv, targetBed));
+	}
+
+}
+if(!wholeGenome) targetBed <- opt$target;
+infiles <- c(opt$model,opt$datasets,targetBed,opt$fasta);
 message("\n[virtuRloops] Checking input paths");
 if(!all(file.exists(infiles))) stop("[virtuRloops] Check input file paths (some don't exist)");
 message("[virtuRloops] Checking target bed file");
@@ -38,20 +65,20 @@ toResize <- F;
 if(length(width)!=1){message("[virtuRloops] Target bed file bins have different sizes. Note that they will be resized to 500 bp");toResize <- T
 } else if(width < 499 | width > 501){message("[virtuRloops] Bins in target bed file don't have 500 bp length so they will be resized");toResize <- T}
 if(toResize){
-	message("[virtuRloops] Resizing...");
+	message("[virtuRloops] Note that out bed file coordinates will be resized to 500 bp!");
 	st <- as.integer(system(paste("awk '{print $2}'", targetBed),intern=T));end <- as.integer(system(paste("awk '{print $3}'", targetBed),intern=T));
 	mid <- ceiling(unlist(lapply(1:length(st),function(i){mean(c(st[i],end[i]))})));
-	suppressMessages(library(stringi));
-	chrTMPfile <- paste("tmp_", opt$name, "_CHR_", stri_rand_strings(1, 10), ".txt", sep="");coordTMPfile <- paste("tmp_", opt$name, "_COORD_", stri_rand_strings(1, 10), ".txt", sep="");
-	resizedBedfile <- paste(opt$name, "_", stri_rand_strings(1, 10), "_resized500bp.bed", sep="");
+	chrTMPfile <- paste(TMP.PATH, "/tmp_", opt$name, "_CHR_", stri_rand_strings(1, 10), ".txt", sep="");
+	coordTMPfile <- paste(TMP.PATH, "/tmp_", opt$name, "_COORD_", stri_rand_strings(1, 10), ".txt", sep="");
+	resizedBedfile <- paste(TMP.PATH, "/", opt$name, "_", stri_rand_strings(1, 10), "_resized500bp.bed", sep="");
 	system(paste("awk '{print $1}'", targetBed, ">", chrTMPfile));
 	write.table(data.frame(mid-250,mid+249), file=coordTMPfile, quote=F, sep="\t", row.names=F, col.names=F);
-	system(paste("paste -d '\t'", chrTMPfile, coordTMPfile, ">", resizedBedfile));system(paste("rm", chrTMPfile, coordTMPfile));
+	system(paste("paste -d '\t'", chrTMPfile, coordTMPfile, ">", resizedBedfile));
 	targetBed <- resizedBedfile;
 }
 message("[virtuRloops] Loading R-loop model");
 suppressMessages(library(randomForest));
-model <- get(load(opt$model));
+model <- get(load(opt$model));feats <- rownames(model$importance);
 message("[virtuRloops] Loading datasets table");
 datasets <- read.csv(file=opt$datasets, sep="\t", h=T);
 message("[virtuRloops] Checking bedgraph feature files");
@@ -59,17 +86,79 @@ bgFiles <- as.character(datasets[,2]);names(bgFiles) <- as.character(datasets[,1
 if(!all(file.exists(bgFiles))) stop("[virtuRloops] Check feature bedgraph file paths (some don't exist)");
 Ncols <- unlist(lapply(bgFiles,function(x){as.integer(system(paste("awk -F'\t' '{print NF; exit}'", x),intern=T))}));
 if(any(Ncols!=4)) stop("[virtuRloops] Feature bedgraph files should have 4 columns (chr-start-end-RPM) and no header!");
-if(!all(rownames(model$importance) %in% names(bgFiles))) stop("[virtuRloops] There are model features that were not found within datasets table");
-if(!"stringi" %in% (.packages())) suppressMessages(library(stringi));
-tmpBg <- unlist(lapply(names(bgFiles),function(signal){paste("tmp_", signal, "_", stri_rand_strings(1, 10), ".txt", sep="")}));names(tmpBg) <- names(bgFiles);
+if(!opt$assembly %in% c("hg38","mm9") & "RLFS" %in% feats) stop("[virtuRloops] QmRLFS-finder output is not yet available for assemblies different than 'mm9' or 'hg38'. However, most of the sequence-based informative power for R-loop prediction of our models resides on GC and deepRloopPre, so we encourage to use a model not trained with QmRLFS-finder (for now).'");
+if(!opt$assembly %in% c("hg38","mm9") & "deepRloop" %in% feats) if(!all(feats[feats != "GC"] %in% names(bgFiles))) stop("[virtuRloops] There are model features that were not found within datasets table. Remember to include unstranded deepRloopPre predictions in 4-column bedgraph format for assemblies different than 'mm9' or 'hg38'");
+if(opt$assembly %in% c("hg38","mm9") | (!opt$assembly %in% c("hg38","mm9") & !"deepRloop" %in% feats)) if(!all(feats[!feats %in% c("GC","RLFS","deepRloop")] %in% names(bgFiles))) stop("[virtuRloops] There are model features that were not found within datasets table");
+tmpBg <- unlist(lapply(names(bgFiles),function(signal){paste(TMP.PATH, "/tmp_", signal, "_", stri_rand_strings(1, 10), ".txt", sep="")}));names(tmpBg) <- names(bgFiles);
 for(signal in names(bgFiles)){
 	message("[virtuRloops] Counting signal: ", signal);
 	system(paste("bedtools map -a ", targetBed, " -b ", bgFiles[signal], " -c 4 -o mean > ", tmpBg[signal], sep=""));
-	system(paste("sed -i $'s/\\t\\./\\t0/g'", tmpBg));
+	system(paste("sed -i $'s/\\t\\./\\t0/g'", tmpBg[signal]));
+}
+# IF seq features
+if("deepRloop" %in% feats & opt$assembly %in% c("hg38","mm9")){
+	tmpDrLp <- paste(TMP.PATH, "/tmp_deepRloopPre_", stri_rand_strings(1, 10), ".txt", sep="");
+	if(!wholeGenome){
+		message("[virtuRloops] Downloading whole genome deepRloopPre bedgraph file");
+		if(opt$assembly == "mm9") drl.f <- paste(BASEPATH, "deepRloopPre/mm9_deepRloop_predict.bg", sep="/");
+		if(opt$assembly == "hg38") drl.f <- paste(BASEPATH, "deepRloopPre/hg38_deepRloop_predict.bg", sep="/");
+		this.drl.f <- paste(TMP.PATH, "/tmp_deepRloopPre_", stri_rand_strings(1, 10), "_whole_genome.bg", sep="");
+		system(paste("wget", drl.f, "-O", this.drl.f));
+		message("[virtuRloops] Computing deepRloopPre score");
+        	call <- paste("bedtools map -a ", targetBed, " -b ",  this.drl.f, " -c 4 -o mean > ", tmpDrLp, sep="");system(call);
+		system(paste("sed -i $'s/\\t\\./\\t0/g'", tmpDrLp));
+	}
+	if(wholeGenome){
+		message("[virtuRloops] Downloading sliding genome deepRloopPre score file");
+		if(opt$assembly == "mm9") drl.f <- paste(BASEPATH, "deepRloopPre/mm9_deepRloop_500bp.bg", sep="/");
+		if(opt$assembly == "hg38") drl.f <- paste(BASEPATH, "deepRloopPre/hg38_deepRloop_500bp.bg", sep="/");
+		system(paste("wget", drl.f, "-O", tmpDrLp));
+	}
+	names(tmpDrLp) <- "deepRloop";tmpBg <- c(tmpBg, tmpDrLp);
+}
+if("GC" %in% feats){
+	tmpGC <- paste(TMP.PATH, "/tmp_GC_", stri_rand_strings(1, 10), ".txt", sep="");
+	if(wholeGenome & opt$assembly %in% c("hg38","mm9")){
+		message("[virtuRloops] Downloading sliding genome GC content file");
+		if(opt$assembly == "mm9") gc.f <- paste(BASEPATH, "GC/mm9_GC_500bp.bg", sep="/");
+		if(opt$assembly == "hg38") gc.f <- paste(BASEPATH, "GC/hg38_GC_500bp.bg", sep="/");
+		system(paste("wget", gc.f, "-O", tmpGC));
+	}
+	if(!wholeGenome & opt$assembly %in% c("hg38","mm9")){
+		fasta <- paste(TMP.PATH, "/tmp_fasta_", opt$assembly, "_", stri_rand_strings(1, 10), ".fasta", sep="")
+		if(opt$assembly == "hg38") fasta.server <- paste(BASEPATH, "genomes/homo_sapiens/hg38/hg38.fa", sep="/");
+		if(opt$assembly == "mm9") fasta.server <- paste(BASEPATH, "genomes/mus_musculus/mm9/mm9.fa", sep="/");
+		message("[virtuRloops] Downloading genome fasta file");
+		system(paste("wget", fasta.server, "-O", fasta));	
+	}
+	if((!wholeGenome & opt$assembly %in% c("hg38","mm9")) | !opt$assembly %in% c("hg38","mm9")){
+		if(!opt$assembly %in% c("hg38","mm9")) fasta <- opt$fasta;
+		peaks.chr <- unique(as.character(system(paste("cat", targetBed, "| awk '{ print $1 }'"), intern=T)));
+		genome.chr <- gsub(">", "", unique(as.character(system(paste("cat", fasta, " | grep '>'"), intern=T))));
+		if(!all(peaks.chr %in% genome.chr)) stop("[virtuRloops] Target bed file contains chromosome names not included in the genome fasta file!");		
+		tmpGC.mv <- paste(TMP.PATH, "/tmp_move_GC_", stri_rand_strings(1, 10), ".txt", sep="");
+        	call <- paste("bedtools nuc -bed ", targetBed, " -fi ",  fasta, " > ", tmpGC, sep="");system(call);
+		system(paste("sed -i '1d'", tmpGC));system(paste("awk '{ print $1\"\t\"$2\"\t\"$3\"\t\"$5 }'", tmpGC, ">", tmpGC.mv, "&& mv", tmpGC.mv, tmpGC));
+	}
+	names(tmpGC) <- "GC";tmpBg <- c(tmpBg, tmpGC);
+}
+if("RLFS" %in% feats){
+	message("[virtuRloops] Downloading whole genome QmRLFS-finder bedgraph file");
+	if(opt$assembly == "mm9") rlfs.f <- paste(BASEPATH, "QmRLFS_finder/mm9_QmRLFS_500bp.bg", sep="/");
+	if(opt$assembly == "hg38") rlfs.f <- paste(BASEPATH, "QmRLFS_finder/hg38_QmRLFS_500bp.bg", sep="/");
+	this.rlfs.f <- paste(TMP.PATH, "/tmp_RLFS_", stri_rand_strings(1, 10), "_whole_genome.bg", sep="");
+	system(paste("wget", rlfs.f, "-O", this.rlfs.f));
+	tmpRLFS <- paste(TMP.PATH, "/tmp_RLFS_", stri_rand_strings(1, 10), ".txt", sep="");
+	if(!wholeGenome){
+		message("[virtuRloops] Counting RLFSs");
+		call <- paste("bedtools map -a ", targetBed, " -b ",  this.rlfs.f, " -c 4 -o mean > ", tmpRLFS, sep="");system(call);
+		system(paste("sed -i $'s/\\t\\./\\t0/g'", tmpRLFS));
+	}
+	if(wholeGenome) system(paste("mv", this.rlfs.f, tmpRLFS));
+	names(tmpRLFS) <- "RLFS";tmpBg <- c(tmpBg, tmpRLFS);
 }
 message("[virtuRloops] Creating feature matrix");
 counts <- lapply(tmpBg,function(x){signif(as.numeric(system(paste("cat", x, "| awk '{print $4}'"),intern=T)),3)});names(counts) <- names(tmpBg);
-rm <- file.remove(tmpBg);
 mat <- matrix(unlist(counts),ncol=length(counts),nrow=length(counts[[1]]));colnames(mat) <- names(counts);naCount <- length(mat[is.na(mat)]);
 if(naCount > 0){
 	mat[is.na(mat)] <- 0;
@@ -78,13 +167,10 @@ if(naCount > 0){
 message("[virtuRloops] Applying model to feature matrix");
 probs <- as.data.frame(predict(model, mat, type="prob"))[,"Peak"];
 message("[virtuRloops] Writing probabilities");
-outFile <- paste(opt$name, "_probs.txt", sep="");write.table(probs, file=outFile, col.names=F, row.names=F);
+outFile <- paste(opt$name, "_probs.txt", sep="");write.table(probs, file=outFile, col.names=F, row.names=F, quote=F);
 message("[virtuRloops] Writing target bed file with probabilities");
 nBed <- system(paste("cat", targetBed, "| wc -l"), intern=TRUE);
 if(nBed!=length(probs)) stop("[virtuRloops] Target bed file has different length than predicted probabilities");
 outBedFile <- paste(opt$name, ".bg", sep="");system(paste("paste", targetBed, outFile, ">", outBedFile));
-if(toResize){
-	system(paste("rm", resizedBedfile));
-	message("[virtuRloops] Note that out bed file coordinates have been resized to 500 bp!");
-}
+system(paste("rm -r", TMP.PATH));
 message("[virtuRloops] Done!\n");
