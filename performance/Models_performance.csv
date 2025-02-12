@@ -1,4 +1,4 @@
-Model	Acc	Prec	Recall	F1	AUC
+Features	Acc	Prec	Recall	F1	AUC
 All	0.926	0.943	0.912	0.927	0.976
 DNase_Histones_deepRloop_GC_RNA_GRO	0.925	0.94	0.913	0.926	0.976
 RNA_GRO_DNase_deepRloop_GC	0.918	0.932	0.907	0.919	0.974
