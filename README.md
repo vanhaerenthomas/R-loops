@@ -25,8 +25,8 @@ Options:
                 Tabulated file (with no header line) containing paths of sequencing datasets (RPM normalized and 4-columns sorted bedgraph format).
                 Note that model features should be provided and others will be ignored.
                 Possible feature names are: H3K9ac,H3K9me3,H3K27me3,H3K4me3,H3K36me3,H3K27ac,H3K4me1,CTCF,RAD21,RNAseq,DNase,GROseq.
-                If assembly is different than 'mm9' or 'hg38', unstranded deepRloopPre scores should be also included both as a
-                bedgraph format and also in the feature table (feature name = deepRloop)
+                If assembly is different than 'mm9' or 'hg38', unstranded deepRloopPre scores should be provided as a bedgraph file
+                and the corresponding path should be included in the feature table (feature name = deepRloop)
 
         -t CHARACTER, --target=CHARACTER
                 Input bed file (3-columns, sorted and with no header). R-loop model will be applied to supplied loci.
